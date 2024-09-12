@@ -1,0 +1,32 @@
+{
+    "manifest_version": 3,
+    "name": "LinkedIn Assistant",
+    "description": "Extension for LinkedIn platform",
+    "version": "1.0",
+    "action": {
+        "default_popup": "index.html"
+    },
+    "permissions": [
+        "storage",
+        "activeTab"
+    ],
+    "host_permissions": [
+        "https://*.linkedin.com/*",
+        "https://api.openai.com/*"
+    ],
+    "content_scripts": [
+        {
+            "matches": ["https://*.linkedin.com/*"],
+            "js": ["openai.js", "content.js"]
+        }
+    ],
+    "content_security_policy": {
+        "extension_pages": "script-src 'self'; object-src 'self'"
+    },
+    "web_accessible_resources": [
+        {
+            "resources": ["openai.js"],
+            "matches": ["https://*.linkedin.com/*"]
+        }
+    ]
+}
