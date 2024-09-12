@@ -29,6 +29,7 @@ window.openai = {
             }
 
             const data = await response.json();
+            console.log("OpenAI response: ", data.choices[0].message.content)
             return data.choices[0].message.content;
         } catch (error) {
             console.error('Error calling OpenAI API:', error);

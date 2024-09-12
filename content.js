@@ -1,7 +1,14 @@
 let card = null;
-let isEnabled = true; // Set to true by default for testing
+let isProfileCardEnabled = false; // Initialize to false
+let isMessagingAssistantEnabled = false; // Initialize to false
 let isUserEditing = false;
 let isMessageSet = false;
+
+console.log('Content script starting to load');
+
+chrome.runtime.sendMessage({action: "contentScriptLoaded"}, function(response) {
+    console.log("Response from background script:", response);
+});
 
 function createCard() {
     if (!card) {
@@ -77,7 +84,7 @@ function showCard(name) {
     if (!card) createCard();
     document.getElementById('cardName').textContent = name;
     card.style.display = 'block';
-    generateCustomMessage(); // Automatically generate message when showing the card
+    generateCustomMessage(); // Only called when the card is shown
 }
 
 function hideCard() {
@@ -96,9 +103,22 @@ function getProfileInfo() {
 }
 
 function checkForProfilePage() {
+    if (window.location.href.includes('linkedin.com/messaging')) {
+        console.log('On messaging page, not showing profile card');
+        hideCard();
+        return;
+    }
+
+    if (!isProfileCardEnabled) {
+        console.log('Profile Card feature is disabled');
+        hideCard();
+        return;
+    }
+
     const profileInfo = getProfileInfo();
     if (profileInfo) {
         showCard(profileInfo.name);
+        // We'll only generate the message if the card is shown
     } else {
         hideCard();
     }
@@ -123,6 +143,11 @@ function hideLoadingSpinner() {
 }
 
 async function generateCustomMessage() {
+    if (!isProfileCardEnabled) {
+        console.log('Profile Card feature is disabled. Skipping message generation.');
+        return;
+    }
+
     const profileInfo = getProfileInfo();
     if (!profileInfo) return;
 
@@ -149,7 +174,9 @@ async function generateCustomMessage() {
         // User prompt
         const userPrompt = `Generate a personalized LinkedIn connection request message for ${profileInfo.name}, who is a ${profileInfo.headline}. The message should be under 200 characters.`;
 
+        console.log('Preparing to make OpenAI API call for message generation');
         const response = await getOpenAIResponse(formattedSystemPrompt, userPrompt);
+        console.log('OpenAI response for message generation:', response);
         document.getElementById('customMessage').textContent = response;
         triggerCustomMessagePopulation(response); // Pass the generated message to this function
     } catch (error) {
@@ -189,19 +216,36 @@ function showCopyNotification(text, color = 'green') {
 // Initialize OpenAI
 async function initializeOpenAI() {
     return new Promise((resolve, reject) => {
-        chrome.storage.sync.get('openaiApiKey', function(data) {
-            if (data.openaiApiKey) {
-                if (window.openai && typeof window.openai.initialize === 'function') {
+        if (window.openai && typeof window.openai.initialize === 'function') {
+            chrome.storage.sync.get('openaiApiKey', function(data) {
+                if (data.openaiApiKey) {
                     window.openai.initialize(data.openaiApiKey);
                     console.log('OpenAI initialized with API key');
                     resolve();
                 } else {
-                    reject(new Error('OpenAI initialization function not found. Make sure openai.js is loaded correctly.'));
+                    reject(new Error('OpenAI API key not found in storage. Please set your API key in the extension popup.'));
                 }
-            } else {
-                reject(new Error('OpenAI API key not found in storage. Please set your API key in the extension popup.'));
-            }
-        });
+            });
+        } else {
+            console.error('OpenAI object not found. Attempting to reload openai.js');
+            const script = document.createElement('script');
+            script.src = chrome.runtime.getURL('openai.js');
+            script.onload = () => {
+                chrome.storage.sync.get('openaiApiKey', function(data) {
+                    if (data.openaiApiKey) {
+                        window.openai.initialize(data.openaiApiKey);
+                        console.log('OpenAI initialized with API key after reloading');
+                        resolve();
+                    } else {
+                        reject(new Error('OpenAI API key not found in storage. Please set your API key in the extension popup.'));
+                    }
+                });
+            };
+            script.onerror = () => {
+                reject(new Error('Failed to load openai.js. Please check the file and try again.'));
+            };
+            document.head.appendChild(script);
+        }
     });
 }
 
@@ -211,8 +255,9 @@ async function getOpenAIResponse(systemPrompt, userPrompt) {
         throw new Error('OpenAI not initialized correctly. Please check your API key and refresh the page.');
     }
     try {
+        console.log('Making OpenAI API call with prompts:', { systemPrompt, userPrompt });
         const response = await window.openai.sendPrompt(systemPrompt, userPrompt);
-        console.log('OpenAI response:', response);
+        console.log('OpenAI API response received:', response);
         return response;
     } catch (error) {
         console.error('Error getting OpenAI response:', error);
@@ -221,28 +266,42 @@ async function getOpenAIResponse(systemPrompt, userPrompt) {
 }
 
 // Initialize the extension
-createCard();
-checkForProfilePage();
+chrome.storage.sync.get(['profileCardEnabled', 'messagingAssistantEnabled'], function(data) {
+    isProfileCardEnabled = data.profileCardEnabled || false;
+    isMessagingAssistantEnabled = data.messagingAssistantEnabled || false;
+    console.log('Profile Card feature initialized as:', isProfileCardEnabled);
+    console.log('Messaging Assistant feature initialized as:', isMessagingAssistantEnabled);
+    if (isProfileCardEnabled) {
+        createCard();
+        checkForProfilePage();
+    }
+});
 
 // Listen for URL changes (for single-page application navigation)
-let lastUrl = location.href; 
+let contentLastUrl = location.href; 
 new MutationObserver(() => {
     const url = location.href;
-    if (url !== lastUrl) {
-        lastUrl = url;
+    if (url !== contentLastUrl) {
+        contentLastUrl = url;
         checkForProfilePage();
     }
 }).observe(document, {subtree: true, childList: true});
 
 // Listen for messages from the popup
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-    if (request.action === "toggleExtension") {
-        isEnabled = request.enabled;
-        console.log('LinkedIn Assistant ' + (isEnabled ? 'activated' : 'deactivated'));
-        if (isEnabled) {
-            checkForProfilePage();
-        } else {
-            hideCard();
+    if (request.action === "toggleFeature") {
+        if (request.feature === "profileCard") {
+            isProfileCardEnabled = request.enabled;
+            console.log('Profile Card feature ' + (isProfileCardEnabled ? 'activated' : 'deactivated'));
+            if (isProfileCardEnabled) {
+                checkForProfilePage();
+            } else {
+                hideCard();
+            }
+        } else if (request.feature === "messagingAssistant") {
+            isMessagingAssistantEnabled = request.enabled;
+            console.log('Messaging Assistant feature ' + (isMessagingAssistantEnabled ? 'activated' : 'deactivated'));
+            // You can add logic here to enable/disable messaging assistant features
         }
         sendResponse({});
     } else if (request.action === "reinitializeOpenAI") {
@@ -257,12 +316,21 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             });
         return true; // Indicates that the response is asynchronous
     } else if (request.action === "updatePrompt") {
-        // Regenerate the message with the new prompt
-        generateCustomMessage();
+        // Regenerate the message with the new prompt only if Profile Card is enabled
+        if (isProfileCardEnabled) {
+            generateCustomMessage();
+        }
+    } else if (request.action === "checkAndPopulateMessage") {
+        if (isProfileCardEnabled) {
+            const customMessage = document.getElementById('customMessage');
+            if (customMessage && customMessage.textContent && customMessage.textContent !== 'Generating message...') {
+                triggerCustomMessagePopulation(customMessage.textContent);
+            }
+        }
     }
 });
 
-console.log('Content script loaded');
+console.log('Content script finished loading');
 
 function setCustomMessage(message) {
     const textarea = document.querySelector('textarea#custom-message.connect-button-send-invite__custom-message');
@@ -300,14 +368,3 @@ function triggerCustomMessagePopulation(message) {
         watchForCustomMessageTextarea(message);
     }
 }
-
-// Modify the message listener
-chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-    if (request.action === "checkAndPopulateMessage") {
-        const customMessage = document.getElementById('customMessage');
-        if (customMessage && customMessage.textContent && customMessage.textContent !== 'Generating message...') {
-            triggerCustomMessagePopulation(customMessage.textContent);
-        }
-    }
-    // ... (other message handling)
-});

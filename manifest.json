@@ -17,15 +17,16 @@
     "content_scripts": [
         {
             "matches": ["https://*.linkedin.com/*"],
-            "js": ["openai.js", "content.js"]
+            "js": ["openai.js", "content.js"],
+            "run_at": "document_idle"
         }
     ],
-    "content_security_policy": {
-        "extension_pages": "script-src 'self'; object-src 'self'"
+    "background": {
+        "service_worker": "background.js"
     },
     "web_accessible_resources": [
         {
-            "resources": ["openai.js"],
+            "resources": ["openai.js", "messaging.js"],
             "matches": ["https://*.linkedin.com/*"]
         }
     ]

@@ -1,6 +1,12 @@
+<!DOCTYPE html>
 <html>
 <head>
     <style>
+        body {
+            width: 300px;
+            padding: 10px;
+            font-family: Arial, sans-serif;
+        }
         .toggle-switch {
             position: relative;
             display: inline-block;
@@ -40,34 +46,45 @@
         input:checked + .slider:before {
             transform: translateX(26px);
         }
-        #apiKeyStatus {
-            margin-top: 10px;
-            font-style: italic;
-        }
-        #promptInput {
-            width: 100%;
-            height: 100px;
-            margin-top: 10px;
-            resize: vertical;
+        .feature {
+            margin-bottom: 20px;
         }
     </style>
 </head>
 <body>
     <h1>LinkedIn Assistant</h1>
-    <p>Toggle to enable/disable on LinkedIn:</p>
-    <label class="toggle-switch">
-        <input type="checkbox" id="extensionToggle">
-        <span class="slider"></span>
-    </label>
-    <span id="status">Assistant is disabled on LinkedIn</span>
 
-    <input type="password" id="apiKeyInput" placeholder="Enter OpenAI API Key">
-    <button id="saveApiKey">Save API Key</button>
-    <p id="apiKeyStatus"></p>
+    <div class="feature">
+        <h2>Profile Card</h2>
+        <label class="toggle-switch">
+            <input type="checkbox" id="profileCardToggle">
+            <span class="slider"></span>
+        </label>
+        <span id="profileCardStatus">Disabled</span>
+    </div>
 
-    <textarea id="promptInput" placeholder="Enter your system prompt here. This sets the context for the AI. Use {name} and {headline} as placeholders."></textarea>
-    <button id="savePrompt">Save System Prompt</button>
-    <p id="promptStatus"></p>
+    <div class="feature">
+        <h2>Messaging Assistant</h2>
+        <label class="toggle-switch">
+            <input type="checkbox" id="messagingAssistantToggle">
+            <span class="slider"></span>
+        </label>
+        <span id="messagingAssistantStatus">Disabled</span>
+    </div>
+
+    <div>
+        <h2>OpenAI API Key</h2>
+        <input type="password" id="apiKeyInput" placeholder="Enter OpenAI API Key">
+        <button id="saveApiKey">Save API Key</button>
+        <p id="apiKeyStatus"></p>
+    </div>
+
+    <div>
+        <h2>Custom Prompt</h2>
+        <textarea id="promptInput" placeholder="Enter your system prompt here. Use {name} and {headline} as placeholders."></textarea>
+        <button id="savePrompt">Save System Prompt</button>
+        <p id="promptStatus"></p>
+    </div>
 
     <script src="popup.js"></script>
 </body>
